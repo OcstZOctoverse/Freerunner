@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using System;
+using Unity.VisualScripting.YamlDotNet.Core;
+using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
@@ -89,9 +91,13 @@ namespace StarterAssets
         // timeout deltatime
         private float _fallTimeoutDelta;
 
+        //jump buffer time
+        private float _jump_buffer_time = 0.3f; //constant technically
+        private float _jump_buffer_countdown;
+
         //coyote time
-        private float _coyote_time = 0.15f; //constant technically
-        private float _coyote_countdown; //for coyote time, makes most sense here
+        private float _coyote_time = 0.15f;
+        private float _coyote_countdown;
 
         // animation IDs
         private int _animIDSpeed;
@@ -157,7 +163,7 @@ namespace StarterAssets
         {
             _hasAnimator = TryGetComponent(out _animator);
 
-            if (Grounded)
+            if(Grounded)
             {
                 _coyote_countdown = _coyote_time;
             }
@@ -309,11 +315,15 @@ namespace StarterAssets
                     _verticalVelocity = -2f;
                 }
 
-                // Jump
-                if (_input.jump)
+                // Jump and buffer jump
+                if ((_input.jump || _jump_buffer_countdown > 0) && _coyote_countdown > 0f)
                 {
                     // the square root of H * -2 * G = how much velocity needed to reach desired height
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
+                    
+                    _jump_buffer_countdown = 0f;
+                    _coyote_countdown = 0f;
+                    _input.jump = false;
 
                     // update animator if using character
                     if (_hasAnimator)
@@ -338,8 +348,17 @@ namespace StarterAssets
                     }
                 }
 
-                // if we are not grounded, do not jump
-                _input.jump = false;
+                if (_jump_buffer_countdown > 0f)
+                {
+                    _jump_buffer_countdown -= Time.deltaTime;
+                }
+
+                //jumping while in the air starts jump buffer countdown
+                if(_input.jump)
+                {
+                    StartBufferCountdown();
+                    _input.jump = false;
+                }
             }
 
             // apply gravity over time if under terminal (multiply by delta time twice to linearly speed up over time)
@@ -347,6 +366,11 @@ namespace StarterAssets
             {
                 _verticalVelocity += Gravity * Time.deltaTime;
             }
+        }
+
+        private void StartBufferCountdown()
+        {
+            _jump_buffer_countdown = _jump_buffer_time;
         }
 
         private static float ClampAngle(float lfAngle, float lfMin, float lfMax)
@@ -376,7 +400,7 @@ namespace StarterAssets
             {
                 if (FootstepAudioClips.Length > 0)
                 {
-                    var index = Random.Range(0, FootstepAudioClips.Length);
+                    var index = UnityEngine.Random.Range(0, FootstepAudioClips.Length);
                     AudioSource.PlayClipAtPoint(FootstepAudioClips[index], transform.TransformPoint(_controller.center), FootstepAudioVolume);
                 }
             }
